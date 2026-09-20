@@ -1,0 +1,90 @@
+# vanilla.yml for building roa kernel on github actions
+
+name: roa, vanilla flavor
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FLAVOR: vanilla
+  REPO: https://github.com/99-blossom/roa_kernel_xiaomi_blossom
+  AK3_REPO: https://github.com/99-blossom/AnyKernel3
+  REPO_FL: roa_kernel_xiaomi_blossom
+  DEFCONFIG: roa-vanilla_default_defconfig
+  BRANCH: roa_ep
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: set variables
+      run: |
+        DATE=$(date +%d%m%Y)
+        {
+          echo "JOBS=$(nproc)"
+          echo "DATE=$DATE"
+          echo "ZIP_NAME=roa-${FLAVOR}-${DATE}.zip"
+        } >> "$GITHUB_ENV"
+
+    - name: install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends build-essential bc bison flex libssl-dev libelf-dev libncurses-dev git curl zip unzip python3 clang lld llvm gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+    - name: clone kernel sources
+      run: |
+        git clone --depth=1 --single-branch --no-tags --branch "$BRANCH" "$REPO" "$REPO_FL"
+
+    - name: build kernel
+      working-directory: ${{ env.REPO_FL }}
+      run: |
+        MAKE_ARGS=(
+          O=out ARCH=arm64
+          CC="clang --target=aarch64-linux-gnu -fuse-ld=lld"
+          HOSTCC=clang
+          CLANG_TRIPLE=aarch64-linux-gnu-
+          CROSS_COMPILE=aarch64-linux-gnu-
+          LD=ld.lld
+          HOSTLD=ld.lld
+          AR=llvm-ar
+          NM=llvm-nm
+          OBJCOPY=llvm-objcopy
+          OBJDUMP=llvm-objdump
+          STRIP=llvm-strip
+          LLVM_IAS=0
+        )
+        make "${MAKE_ARGS[@]}" "$DEFCONFIG"
+        make "${MAKE_ARGS[@]}" -j"$JOBS"
+        ls out/arch/arm64/boot/Image out/arch/arm64/boot/Image.gz
+
+    - name: clone AnyKernel3
+      run: |
+        git clone --depth=1 --single-branch --no-tags --branch master "$AK3_REPO" AnyKernel3
+
+    - name: pack to AnyKernel3
+      working-directory: AnyKernel3
+      run: |
+        cp "../$REPO_FL/out/arch/arm64/boot/Image.gz" .
+        zip -r9 "../$ZIP_NAME" . -x '.git*' README.md '*placeholder'
+
+    - name: publish release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        BOOT="$REPO_FL/out/arch/arm64/boot"
+        TAG="roa-${FLAVOR}-${DATE}"
+        COMMIT=$(git -C "$REPO_FL" rev-parse --short HEAD)
+        FILES=("$ZIP_NAME" "$BOOT/Image" "$BOOT/Image.gz")
+
+        if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          gh release upload "$TAG" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+        else
+          gh release create "$TAG" "${FILES[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "roa ${FLAVOR} ${DATE}" \
+            --notes "Branch: ${BRANCH}, commit: ${COMMIT}, defconfig: ${DEFCONFIG}"
+        fi
