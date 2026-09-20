@@ -56,7 +56,6 @@ jobs:
           OBJDUMP=llvm-objdump
           STRIP=llvm-strip
           LLVM_IAS=0
-          KCFLAGS="-Wno-address-of-packed-member"
         )
         make "${MAKE_ARGS[@]}" "$DEFCONFIG"
         make "${MAKE_ARGS[@]}" -j"$JOBS"
