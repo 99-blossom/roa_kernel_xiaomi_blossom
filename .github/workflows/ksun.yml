@@ -59,9 +59,24 @@ jobs:
         )
         make "${MAKE_ARGS[@]}" "$DEFCONFIG"
         sed -i 's/^CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION="-roa-ksun"/' out/.config
+
+        # integrate KernelSU Next
         curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
+        git -C KernelSU-Next fetch --unshallow --tags 2>/dev/null || git -C KernelSU-Next fetch --tags
+        git -C KernelSU-Next checkout v3.3.0
+
+        # enable required configs
+        ./scripts/config --file out/.config \
+          -e KSU \
+          -e KPROBES \
+          -e KPROBE_EVENTS \
+          -e KSU_KPROBE_HOOKS
+
+        make "${MAKE_ARGS[@]}" O=out olddefconfig
+
         grep -iE "KPROBES" out/.config
         grep -iE "KSU" out/.config
+
         make "${MAKE_ARGS[@]}" -j"$JOBS"
         ls out/arch/arm64/boot/Image out/arch/arm64/boot/Image.gz
 
