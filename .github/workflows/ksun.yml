@@ -60,10 +60,12 @@ jobs:
         make "${MAKE_ARGS[@]}" "$DEFCONFIG"
         sed -i 's/^CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION="-roa-ksun"/' out/.config
 
-        # integrate KernelSU Next
         curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
+
         git -C KernelSU-Next fetch --unshallow --tags 2>/dev/null || git -C KernelSU-Next fetch --tags
-        git -C KernelSU-Next checkout v3.3.0
+        git -C KernelSU-Next checkout v3.4.0
+        git -C KernelSU-Next describe --tags --exact-match
+        git -C KernelSU-Next log -1 --oneline
 
         # enable required configs
         ./scripts/config --file out/.config \
